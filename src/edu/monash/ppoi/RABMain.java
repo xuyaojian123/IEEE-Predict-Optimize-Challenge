@@ -16,8 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * ç®—æ³•æ€»æµç¨‹
- *
+ * Ëã·¨×ÜÁ÷³Ì
+ * 
  * @author qingling zhu
  *
  */
@@ -26,32 +26,39 @@ public class RABMain {
 	private static ChronicsHandler chronicsHandler;
 
 	public static void main(String[] args) {
-		args[0] = "large_4";
+		//args[0] = "large_4";
+		String[] s = args[0].split("_");
+		String a ="",b="";
+		if(s[0].equals("small")){
+			a = "0";
+		}else if(s[0].equals("large")){
+			a = "1";
+		}
+		b = s[1];
+		String directory = "data/results/instance"+ a + b +"/finalOpt_" + args[0];
 		File dir;
 		int n, range;
 		int maxRoom = 10;
 		ChronicsScheduleChecker chronicsScheduleChecker;
 		Evaluation evaluationRA;
-		double bestCost, globalCost;
+		double bestCost, ttCost, batteryCost, globalCost;
 		String instanceFilename = "./data/phase_2_instances/phase2_instance_" + args[0] + ".txt";
 		Instance instance = Instance.parseInstance(new File(instanceFilename));
 		System.out.println("Parameters.timeSlotsLength:" + Parameters.timeSlotsLength);
 		chronicsHandler = new ChronicsHandler(Parameters.year, Parameters.month, Phase.P2.getLoadSeries(),
 				Phase.P2.readPriceSeries());
 		// Extract electricity prices.
-		prices = chronicsHandler.getPrices();// FileUtils.readPriceCSV(Parameters.priceFile);
-		// int MaxIteration = Integer.parseInt(args[1]);// timetablingè¿‡ç¨‹ä¸­evolutionary
-		// algorithm çš„å¤±è´¥æ¬¡æ•°
+		prices = chronicsHandler.getPrices();
 		System.out.println("Begin to optimize instance:" + args[0]);
 		int maxRun = Integer.parseInt(args[1]);
 		System.out.println("It will run: " + maxRun + " times.!");
 		int MaxBatteryIter = Integer.parseInt(args[2]);
 		String who = args[3];
-		String directory = "data/results/instance14/finalOpt_" + args[0];
+		
 		int batteryNum = instance.getAllBatteries().size();
 		int idx = 0, begin = 0;
 		Evaluation evaluation = new Evaluation(instance,
-				new int[batteryNum][Parameters.timeSlotsLength]);
+				new int[instance.getAllBatteries().size()][Parameters.timeSlotsLength]);
 		double mutation_rateR = 1.0 / (double) evaluation.co.numSameScopeR.size();
 		double mutation_rateA = 1.0 / (double) evaluation.co.numSameScopeA.size();
 		double mutation_rateRA = 1.0
@@ -59,7 +66,7 @@ public class RABMain {
 		double mutation_rateB = 0.001;// 1.0/(double)Parameters.timeSlotsLength;
 		System.out.println("mR:" + mutation_rateR + "\nmA:" + mutation_rateA + "\nmB:" + mutation_rateB);
 		int[][] thisBattery = new int[instance.getAllBatteries().size()][Parameters.timeSlotsLength];
-		// ä»globalBestæ–‡ä»¶å¤¹ä¸­è¯»å–
+		// ´ÓglobalBestÎÄ¼ş¼ĞÖĞ¶ÁÈ¡
 		ArrayList<Integer> bestPermutation = null;
 		Schedule bestSchedule = null;
 		int[][] bestBattery = null;
@@ -79,6 +86,7 @@ public class RABMain {
 		while (bestSchedule == null) {
 			System.out.println("No permutation file in globalBest directory.!!!! RANDOM INIT.!!");
 			bestPermutation = new ArrayList<Integer>();
+			// permOrderedRCourse,permRËæ»ú²úÉúµÄ×éºÏ
 			begin = 0;
 			for (int scopei=0;scopei<evaluation.co.numSameScopeR.size();scopei++) {
 				n = evaluation.co.numSameScopeR.get(scopei);
@@ -87,10 +95,13 @@ public class RABMain {
 				Utils.randomPermutation(perm, n);
 				for (int i = 0; i < n; i++) {
 					bestPermutation.add(perm[i] + begin);
+					//bestPermutation.add(PseudoRandom.randInt(0, range*8-1));
 					bestPermutation.add(PseudoRandom.randInt(0, Parameters.maxBoundR));
+					bestPermutation.add(PseudoRandom.randInt(0,maxRoom));
 				}
 				begin += n;
 			}
+			// permOrderedACourse,permAËæ»ú²úÉúµÄ×éºÏ
 			begin = 0;
 			for (int scopei=0;scopei< evaluation.co.numSameScopeA.size();scopei++) {
 				n = evaluation.co.numSameScopeA.get(scopei);
@@ -99,7 +110,9 @@ public class RABMain {
 				Utils.randomPermutation(perm, n);
 				for (int i = 0; i < n; i++) {
 					bestPermutation.add(perm[i] + begin);
+					//bestPermutation.add(PseudoRandom.randInt(0, range*96));
 					bestPermutation.add(PseudoRandom.randInt(0, Parameters.maxBoundA));
+					bestPermutation.add(PseudoRandom.randInt(0,maxRoom));
 				}
 				begin += n;
 			}
@@ -111,14 +124,28 @@ public class RABMain {
 			bestBattery = new int[instance.getAllBatteries().size()][Parameters.timeSlotsLength];
 		}
 		evaluationRA = new Evaluation(bestBattery);
-
+		// µÃµ½bestCost
 		chronicsScheduleChecker = new ChronicsScheduleChecker(chronicsHandler, bestSchedule);
 		bestCost = chronicsScheduleChecker.getObjective();
 		System.out.println(bestCost);
-
+		
+		if(bestPermutation.size()==2*(instance.getAllOnceOff().size()+instance.getAllRecurring().size())) {
+			//À©Õ¹room
+			System.out.println("permutation is 2 times number of activities, then should be expanded by zeros..");
+			for(idx = 0;idx+2 < 3*(instance.getAllOnceOff().size()+instance.getAllRecurring().size());idx=idx+3) {
+				bestPermutation.add(idx+2, 0);
+			}
+		}else if(bestPermutation.size()==3*(instance.getAllOnceOff().size()+instance.getAllRecurring().size())) {
+			System.out.println("permutation is 3 times number of activities.");
+		}
+//		System.exit(0);
+		// ÕÒµ½evaluationRA¶ÔÓ¦µÄpermutation£¿£¿
 		bestPermutation = evaluationRA.getNewPermutation(bestPermutation, bestSchedule);
+		// System.out.println("recovery
+		// score:"+evaluationRA.fitness(batteryPermutation));
 		System.out.println("recovery score:" + evaluationRA.evaluate(evaluationRA.TimeTable1));
 		System.out.println("recovery score1:" + evaluationRA.fitness(bestPermutation));
+		
 		double cost = evaluation.evaluate(evaluationRA.TimeTable1, bestBattery);
 		System.out.println("begin with RAB cost:" + cost);
 		if (Math.abs(cost - bestCost) > 0.0001) {
@@ -128,125 +155,137 @@ public class RABMain {
 
 		System.out.println("\n");
 		System.out.println(java.time.LocalDateTime.now());
-
+		// System.out.println(java.time.Clock.systemUTC().instant());
 		System.out.println("******************************Begin to run ******************");
 
 		int iterRA = 0, maxIterRA = 10;
 		int run = 0;
 		boolean isImproved = false;
-
+		
 		while (run < maxRun) {
 			System.out.println(
 					"\n======Begin to run :" + (run + 1) + "******************" + java.time.LocalDateTime.now());
 			System.out.println("===============fixed battery to optimize timetable================");
-			// å›ºå®šç”µæ± å¯¹permutationè¿›è¡Œæ‰°åŠ¨
+			// ¹Ì¶¨µç³Ø¶Ôpermutation½øĞĞÈÅ¶¯
 			evaluationRA = new Evaluation(bestBattery);
-			// æ‰¾åˆ°evaluationRAå¯¹åº”çš„permutationï¼Ÿï¼Ÿ
+			// ÕÒµ½evaluationRA¶ÔÓ¦µÄpermutation£¿£¿
 			ArrayList<Integer> batteryPermutation = evaluationRA.getNewPermutation(bestPermutation, bestSchedule);
+			// System.out.println("recovery
+			// score:"+evaluationRA.fitness(batteryPermutation));
 			bestCost = evaluationRA.evaluate(evaluationRA.TimeTable1);
 			System.out.println("recovery score:" + bestCost);
-			// å¯¹bestPermutationè¿›è¡Œlocal search
+			ttCost = bestCost;//ÕâÀïÎªÊ²Ã´ĞèÒª2¸öÄØ£¿
+			// ¶ÔbestPermutation½øĞĞlocal search
 			iterRA = 0;
 			isImproved = false;
-			// æ‰¾ä¸€ä¸ªæ–°çš„permutation
-			List<Integer> permutation = new ArrayList<Integer>();
+			// ÕÒÒ»¸öĞÂµÄpermutation
+			ArrayList<Integer> permutation = new ArrayList<Integer>();
+
 			while (iterRA < maxIterRA) {
 				idx = 0;
 				begin = 0;
 				permutation = new ArrayList<Integer>();
+
 				for (int scopei=0;scopei<evaluation.co.numSameScopeR.size();scopei++) {
 					n = evaluation.co.numSameScopeR.get(scopei);
 					range = evaluation.co.rangeSameScopeR.get(scopei);
-					if (PseudoRandom.randDouble() < mutation_rateRA) {// åˆšå¼€å§‹çš„æ—¶å€™éšæœºçš„æœºä¼šå¾ˆå°ï¼Œæ…¢æ…¢å˜å¤§ã€‚
-						// è¿›è¡Œæ‰°åŠ¨
+					if (PseudoRandom.randDouble() < mutation_rateRA) {// ¸Õ¿ªÊ¼µÄÊ±ºòËæ»úµÄ»ú»áºÜĞ¡£¬ÂıÂı±ä´ó¡£
+						// ½øĞĞÈÅ¶¯
 						int[] perm = new int[n];
 						Utils.randomPermutation(perm, n);
 						for (int i = 0; i < n; i++) {
 							permutation.add(perm[i] + begin);
-							permutation.add(PseudoRandom.randInt(0, Parameters.maxBoundR));
-							idx = idx + 2;
+							permutation.add(PseudoRandom.randInt(0, range*32-1));
+							permutation.add(PseudoRandom.randInt(0, maxRoom));
+							idx = idx + 3;
 						}
 					} else {
-						// ä¿æŒbestçš„ä¸å˜ã€‚
+						// ±£³ÖbestµÄ²»±ä¡£
 						for (int i = 0; i < n; i++) {
 							int bestidx = batteryPermutation.get(idx);
 							permutation.add(bestidx);
 							permutation.add(batteryPermutation.get(idx + 1));
-							idx = idx + 2;
+							permutation.add(batteryPermutation.get(idx + 2));
+							idx = idx + 3;
 						}
 					}
 					begin += n;
 				}
-				// permOrderedACourse,permAéšæœºäº§ç”Ÿçš„ç»„åˆ
+				// permOrderedACourse,permAËæ»ú²úÉúµÄ×éºÏ
 				begin = 0;
-				for (int scopei=0;scopei < evaluation.co.numSameScopeA.size();scopei++) {
+
+				for (int scopei=0;scopei<evaluation.co.numSameScopeA.size();scopei++) {
 					n = evaluation.co.numSameScopeA.get(scopei);
 					range = evaluation.co.rangeSameScopeA.get(scopei);
-					if (PseudoRandom.randDouble() < mutation_rateRA) {// åˆšå¼€å§‹çš„æ—¶å€™éšæœºçš„æœºä¼šå¾ˆå°ï¼Œæ…¢æ…¢å˜å¤§ã€‚
+					if (PseudoRandom.randDouble() < mutation_rateRA) {// ¸Õ¿ªÊ¼µÄÊ±ºòËæ»úµÄ»ú»áºÜĞ¡£¬ÂıÂı±ä´ó¡£
 						int[] perm = new int[n];
 						Utils.randomPermutation(perm, n);
 						for (int i = 0; i < n; i++) {
 							permutation.add(perm[i] + begin);
-							permutation.add(PseudoRandom.randInt(0,Parameters.maxBoundA));
-							idx = idx + 2;
+							permutation.add(PseudoRandom.randInt(0, range*96));
+							permutation.add(PseudoRandom.randInt(0, maxRoom));
+							idx = idx + 3;
 						}
 					} else {
-						// ä¿æŒbestçš„ä¸å˜
+						// ±£³ÖÔ­À´µÄ²»±ä¡£
 						for (int i = 0; i < n; i++) {
 							int bestidx = batteryPermutation.get(idx);
 							permutation.add(bestidx);
 							permutation.add(batteryPermutation.get(idx + 1));
-							idx = idx + 2;
+							permutation.add(batteryPermutation.get(idx + 2));
+							idx = idx + 3;
 						}
 					}
 					begin += n;
 				}
 				cost = evaluationRA.fitness(permutation);
-				if (cost < bestCost - 0.1) {
+				if (cost < ttCost) {
 					System.out.println("find a permutation with cost:" + cost + " then find better solution = true.");
 					iterRA = 0;
-					bestCost = cost;
+					ttCost = cost;
 					batteryPermutation = new ArrayList<Integer>(permutation);
 					bestSchedule = evaluationRA.getSchedule();
-					bestPermutation = new ArrayList<Integer>(permutation);// å½“æ’è¯¾æå‡äº†ï¼Œç”µæ± æ²¡æœ‰æå‡æ—¶ï¼Œéœ€è¦æ›´æ–°bestPermutation.
+					bestPermutation = new ArrayList<Integer>(permutation);// µ±ÅÅ¿ÎÌáÉıÁË£¬µç³ØÃ»ÓĞÌáÉıÊ±£¬ĞèÒª¸üĞÂbestPermutation.
 					isImproved = true;
 				}
-				else if (!isImproved && iterRA > 0.5 * maxIterRA && Math.abs(cost - bestCost) > 0.1
-						&& cost < bestCost * 1.01) {
-					batteryPermutation = new ArrayList<Integer>(permutation);// å› ä¸ºè¿™æ˜¯åé€€ä¸€æ­¥ï¼Œæ‰€ä»¥ä¸ç”¨è¦†ç›–bestPermutation.
+				else if (!isImproved && iterRA > 0.8 * maxIterRA && Math.abs(cost - bestCost) > 0.1
+						&& cost < bestCost * 1.001) {
+					batteryPermutation = new ArrayList<Integer>(permutation);// ÒòÎªÕâÊÇºóÍËÒ»²½£¬ËùÒÔ²»ÓÃ¸²¸ÇbestPermutation.
 					System.out.println("find a permutation with cost:" + cost + " then break.");
 					break;
 				}
 				iterRA++;
+				System.out.println(iterRA);
 				if (iterRA % 10 == 0)
 					System.out.print(iterRA + ",");
 			}
 			System.out.println("===============fixed timetable to optimize battery================");
-			// ****************å›ºå®šbatteryPermutationæ¥ä¼˜åŒ–ç”µæ± ã€‚ã€‚ã€‚
-			// æ²¡æœ‰ç”µæ± çš„æ’è¯¾åˆ†æ•°
+			// ****************¹Ì¶¨batteryPermutationÀ´ÓÅ»¯µç³Ø¡£¡£¡£
+			evaluationRA.fitness(batteryPermutation);
+			// Ã»ÓĞµç³ØµÄÅÅ¿Î·ÖÊı
 			double RAscore = evaluation.evaluate(evaluationRA.TimeTable1);
 			System.out.println("RA score:" + RAscore + " then remove battery before and get new battery.");
-			// è·å–æœ‰æ’è¯¾ï¼Œæ²¡æœ‰ç”µæ± çš„baseloadï¼Œå»æ‰ä¹‹å‰çš„ç”µæ± 
+			// »ñÈ¡ÓĞÅÅ¿Î£¬Ã»ÓĞµç³ØµÄbaseload£¬È¥µôÖ®Ç°µÄµç³Ø
 			List<Double> loadAfterTabling = new ArrayList<Double>(evaluationRA.loadAfterTabling);
 			for (int batteryi = 0; batteryi < bestBattery.length; batteryi++) {
 				Battery battery = instance.getAllBatteries().get(batteryi);
 				for (int time = 0; time < Parameters.timeSlotsLength; time++) {
-					// 1. è®¡ç®—è¿™ä¸ªè§£å¯¹åº”çš„èƒ½é‡å’Œloadè´Ÿè½½
+					// 1. ¼ÆËãÕâ¸ö½â¶ÔÓ¦µÄÄÜÁ¿ºÍload¸ºÔØ
 					// -1:DisCharge, 0:hold, 1:Charge
 					int actioni = bestBattery[batteryi][time];
 					Battery.Act action = Battery.Act.HOLD;
 					switch (actioni) {
-						case -1:
-							action = Battery.Act.DISCHARGE;
-							break;
-						case 0:
-							action = Battery.Act.HOLD;
-							break;
-						case 1:
-							action = Battery.Act.CHARGE;
-							break;
-						default:
-							System.err.println("no this action value.!!!!!!!!!!");
+					case -1:
+						action = Battery.Act.DISCHARGE;
+						break;
+					case 0:
+						action = Battery.Act.HOLD;
+						break;
+					case 1:
+						action = Battery.Act.CHARGE;
+						break;
+					default:
+						System.err.println("no this action value.!!!!!!!!!!");
 					}
 					loadAfterTabling.set(time, loadAfterTabling.get(time) - battery.getLoadKW(action));
 				}
@@ -256,17 +295,20 @@ public class RABMain {
 					thisBattery[batteryi][time] = bestBattery[batteryi][time];
 				}
 			}
-			double batteryCost = cost(instance.getAllBatteries(), thisBattery, loadAfterTabling);
+			batteryCost = cost(instance.getAllBatteries(), thisBattery, loadAfterTabling);
 			System.out.println("optimize battery from best Battery before with cost = "+batteryCost);
+			
 			int failed = 0;
 			while (true) {
-				// å¯¹batteryScheduleè¿›è¡Œæ‰°åŠ¨
+				// ¶ÔbatterySchedule½øĞĞÈÅ¶¯
 				int[][] newBattery = new int[batteryNum][Parameters.timeSlotsLength];
 				for (int batteryi = 0; batteryi < batteryNum; batteryi++) {
 					Battery battery = instance.getBattery(batteryi);
 					double state = battery.getCapacityKWh();
+					// int randi = PseudoRandom.randInt(0,
+					// Parameters.timeSlotsLength-1);//Ê¹µÃÃ¿¸öĞÂ½â¸ú×îºÃ½â²»Ò»Ñù
 					for (int time = 0; time < Parameters.timeSlotsLength; time++) {
-						// 1. è®¡ç®—è¿™ä¸ªè§£å¯¹åº”çš„èƒ½é‡å’Œloadè´Ÿè½½
+						// 1. ¼ÆËãÕâ¸ö½â¶ÔÓ¦µÄÄÜÁ¿ºÍload¸ºÔØ
 						// -1:DisCharge, 0:hold, 1:Charge
 						int actioni = 0;
 						if (PseudoRandom.randDouble() < mutation_rateB)
@@ -277,20 +319,20 @@ public class RABMain {
 						do {
 							Battery.Act action = Battery.Act.HOLD;
 							switch (actioni) {
-								case -1:
-									action = Battery.Act.DISCHARGE;
-									break;
-								case 0:
-									action = Battery.Act.HOLD;
-									break;
-								case 1:
-									action = Battery.Act.CHARGE;
-									break;
-								default:
-									System.err.println("no this action value.!!!!!!!!!!");
+							case -1:
+								action = Battery.Act.DISCHARGE;
+								break;
+							case 0:
+								action = Battery.Act.HOLD;
+								break;
+							case 1:
+								action = Battery.Act.CHARGE;
+								break;
+							default:
+								System.err.println("no this action value.!!!!!!!!!!");
 							}
-							// 2. æ£€æŸ¥æ˜¯å¦æ»¡è¶³çº¦æŸæ¡ä»¶
-							double energyKWh = battery.getEnergyKWh(action, 15d / 60d);// 15åˆ†é’Ÿåçš„ç”µæ± èƒ½é‡
+							// 2. ¼ì²éÊÇ·ñÂú×ãÔ¼ÊøÌõ¼ş
+							double energyKWh = battery.getEnergyKWh(action, 15d / 60d);// 15·ÖÖÓºóµÄµç³ØÄÜÁ¿
 							state = state + energyKWh;
 							// System.out.println(state);
 							if (state < 0 || state > battery.getCapacityKWh()) {
@@ -306,6 +348,7 @@ public class RABMain {
 						} while (true);
 						newBattery[batteryi][time] = actioni;
 					}
+
 				}
 				cost = cost(instance.getAllBatteries(), newBattery, loadAfterTabling);
 				if (cost < batteryCost) {
@@ -317,6 +360,7 @@ public class RABMain {
 							thisBattery[batteryi][time] = newBattery[batteryi][time];
 						}
 					}
+
 				}
 				failed++;
 				if (failed % 10000 == 0) {
@@ -326,9 +370,10 @@ public class RABMain {
 					break;
 			}
 			cost = evaluation.evaluate(evaluationRA.TimeTable1, thisBattery);
-			if (cost < bestCost) {//æ•´ä½“æœ‰æå‡ï¼Œä¿å­˜batteryPermutationï¼ŒthisBatteryï¼Œå¹¶æŠŠä»–ä»¬èµ‹å€¼ç»™bestPermutationå’ŒbestBattery
+			if (cost < bestCost) {//ÕûÌåÓĞÌáÉı£¬±£´æbatteryPermutation£¬thisBattery£¬²¢°ÑËûÃÇ¸³Öµ¸øbestPermutationºÍbestBattery
 				System.out.println("RAB successed with cost" + cost);
 				bestCost = cost;
+				
 				bestPermutation = new ArrayList<Integer>(batteryPermutation);
 				for (int batteryi = 0; batteryi < batteryNum; batteryi++) {
 					for (int time = 0; time < Parameters.timeSlotsLength; time++) {
@@ -350,26 +395,11 @@ public class RABMain {
 				FileUtils.TimeTable2csv(evaluationRA.TimeTable1,
 						directory + "/TimeTable_" + String.valueOf((int) bestCost) +"_"+who+".csv",
 						DateHandler.PERIODS_PER_DAY);
-			} else if(isImproved){//å¦‚æœpermutationæœ‰æå‡ï¼Œä½†æ˜¯æ•´ä½“æ²¡æœ‰æå‡ã€‚
-				System.out.println("RA successed with cost" + bestCost);
-				// SAVE
-				FileUtils.TimeTableAndBaseload2csv(evaluationRA.TimeTable1, loadAfterTabling,
-						directory + "/TTandBaseload_" + args[0] + "_Scored" + String.format("%2.1f", bestCost) + "_"
-								+who+ ".csv");
-				FileUtils.saveCombination(bestPermutation,
-						directory + "/Permutation_Scored" + String.valueOf((int) bestCost) + "_" +who+ ".csv");
-				FileUtils.saveBatterySchedule(bestBattery, directory + "/bestBatterySchedule_Scored"
-						+ String.format("%2.1f", bestCost) + "_" +who+ ".csv");
-				System.out.println("Run:" + run + " get better RAB cost:" + cost);
-				FileUtils.output(instance, evaluationRA.TimeTable1, bestBattery, directory
-						+ "/phase2_instance_solution_" + args[0] + "_" + String.valueOf((int) bestCost) + "_" +who+ "_(RAB).txt");//
-				FileUtils.TimeTable2csv(evaluationRA.TimeTable1,
-						directory + "/TimeTable_" + String.valueOf((int) bestCost) +"_"+who+".csv",
-						DateHandler.PERIODS_PER_DAY);
-			}else{
-				System.out.println("RAB failed with cost:" + cost);
 			}
-			// æ¯æ¬¡è¿­ä»£ç»“æŸå’Œæœ€å¥½çš„å¯¹æ¯”
+			else{
+				System.out.println("RAB failed with cost:" + cost + "; best score is:"+bestCost);
+			}
+			// Ã¿´Îµü´ú½áÊøºÍ×îºÃµÄ¶Ô±È
 			ArrayList<Integer> globalPermutation = null;
 			Schedule globalSchedule = null;
 			int[][] globalBattery = null;
@@ -395,7 +425,7 @@ public class RABMain {
 						"=========================I have read a new permutation and battery===============================");
 				bestSchedule = globalSchedule;
 				bestCost = globalCost;
-				// åˆ«çš„ç¨‹åºæ‰¾åˆ°äº†æœ€å¥½çš„è§£ï¼Œåˆ™ä»å…¶æ¢å¤æœ€å¥½çš„è§£ï¼Œä¹Ÿå³æ˜¯bestPermutation and bestBattery
+				// ±ğµÄ³ÌĞòÕÒµ½ÁË×îºÃµÄ½â£¬Ôò´ÓÆä»Ö¸´×îºÃµÄ½â£¬Ò²¼´ÊÇbestPermutation and bestBattery
 				bestPermutation = new ArrayList<Integer>(globalPermutation);
 				for (int batteryi = 0; batteryi < batteryNum; batteryi++) {
 					for (int time = 0; time < Parameters.timeSlotsLength; time++) {
@@ -403,22 +433,22 @@ public class RABMain {
 					}
 				}
 			}else if(globalCost>bestCost){
-				//å…ˆåˆ é™¤globalBest
+				//ÏÈÉ¾³ıglobalBest
 				dir = new File(directory + "/globalBest/");
 				for(File f:dir.listFiles()) {
 					if(!f.isDirectory())
 						f.delete();
 				}
-				//ä¿å­˜åˆ°globalBestï¼Œæ–¹ä¾¿å…¶ä»–ç¨‹åºåŒæ­¥ã€‚
+				//±£´æµ½globalBest£¬·½±ãÆäËû³ÌĞòÍ¬²½¡£
 				// SAVE
 				FileUtils.TimeTableAndBaseload2csv(evaluationRA.TimeTable1, loadAfterTabling,
 						directory + "/globalBest/TTandBaseload_" + args[0] + "_Scored" + String.format("%2.1f", bestCost) + "_"
-								+who+ ".csv");
+								 +who+ ".csv");
 				FileUtils.saveCombination(bestPermutation,
 						directory + "/globalBest/Permutation_Scored" + String.valueOf((int) bestCost) + "_" +who+ ".csv");
 				FileUtils.saveBatterySchedule(bestBattery, directory + "/globalBest/bestBatterySchedule_Scored"
 						+ String.format("%2.1f", bestCost) + "_" +who+ ".csv");
-
+				
 				FileUtils.output(instance, evaluationRA.TimeTable1, bestBattery, directory
 						+ "/globalBest/phase2_instance_solution_" + args[0] + "_" + String.valueOf((int) bestCost) +who+ "_(RAB).txt");//
 				FileUtils.TimeTable2csv(evaluationRA.TimeTable1,
@@ -434,6 +464,7 @@ public class RABMain {
 	static double cost(List<Battery> batterys, int[][] batterySchedule, List<Double> baseload) {
 		double cost = 0.0;
 		int horizon = batterySchedule[0].length;
+
 		ArrayList<Double> baseload_v = new ArrayList<Double>();
 		// make a copy of baseload
 		double max_load = Double.MIN_VALUE;
@@ -444,24 +475,26 @@ public class RABMain {
 			}
 		}
 		double state, load;// [] = new double[batterys.size()];
+		// double load[] = new double[batterys.size()];
+
 		for (int batteryi = 0; batteryi < batterys.size(); batteryi++) {
 			Battery battery = batterys.get(batteryi);
-			state = battery.getCapacityKWh();// åˆšå¼€å§‹éƒ½å……æ»¡ç”µã€‚
+			state = battery.getCapacityKWh();// ¸Õ¿ªÊ¼¶¼³äÂúµç¡£
 			for (int time = 0; time < horizon; time++) {
 				int actioni = batterySchedule[batteryi][time];
 				Battery.Act action = Battery.Act.HOLD;
 				switch (actioni) {
-					case -1:
-						action = Battery.Act.DISCHARGE;
-						break;
-					case 0:
-						action = Battery.Act.HOLD;
-						break;
-					case 1:
-						action = Battery.Act.CHARGE;
-						break;
-					default:
-						System.err.println("no this action value.!!!!!!!!!!");
+				case -1:
+					action = Battery.Act.DISCHARGE;
+					break;
+				case 0:
+					action = Battery.Act.HOLD;
+					break;
+				case 1:
+					action = Battery.Act.CHARGE;
+					break;
+				default:
+					System.err.println("no this action value.!!!!!!!!!!");
 				}
 				// DETERMINE LOAD ON ACTION
 				load = battery.getLoadKW(action);
@@ -469,7 +502,7 @@ public class RABMain {
 				baseload_v.set(time, baseload_v.get(time) + load);
 
 				// determine change in power
-				state += battery.getEnergyKWh(action, 15d / 60d);// 15åˆ†é’Ÿåçš„ç”µæ± èƒ½é‡
+				state += battery.getEnergyKWh(action, 15d / 60d);// 15·ÖÖÓºóµÄµç³ØÄÜÁ¿
 				if (state < 0 || state > battery.getCapacityKWh()) {
 					System.out.println("a invalid solution. this is impossible.!!!!!!!!please check.");
 					System.exit(0);
@@ -482,7 +515,7 @@ public class RABMain {
 				max_load_v = baseload_v.get(time);
 			}
 		}
-		cost += 0.005 * (max_load_v * max_load_v - max_load * max_load);// å¦‚æœè¶…è¿‡æœ€å¤§è´Ÿè½½ï¼ŒåŠ ä¸€ä¸ªå¤§çš„æƒ©ç½šé¡¹ã€‚
+		cost += 0.005 * (max_load_v * max_load_v - max_load * max_load);// Èç¹û³¬¹ı×î´ó¸ºÔØ£¬¼ÓÒ»¸ö´óµÄ³Í·£Ïî¡£
 		return cost;
 	}
 }
