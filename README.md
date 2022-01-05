@@ -141,7 +141,6 @@ We use the local search method to solve the optimization problem. At the beginni
 <div align="center">
   <img src="images/flowchat.png" style="zoom:60%" ></img> 
 </div>
-![avatar](/home/picture/1.png)
 
 <!-- CONTACT -->
 ## Contact
