@@ -31,13 +31,13 @@
 <div align="center">
 
   <img src="images/logo.png" alt="Logo" width="80" height="80"></img>
-  <h3 align="center">A local search method for solving a bi-level timetabling and battery optimization problem</h3>
+  <h1 align="center">A local search method for solving a bi-level timetabling and battery optimization problem</h1>
 </div>
 
 
 
 <!-- TABLE OF CONTENTS -->
-<details>
+<!-- <details>
   <summary>Table of Contents</summary>
   <ol>
     <li>
@@ -60,7 +60,7 @@
     <li><a href="#contact">Contact</a></li>
     <li><a href="#acknowledgments">Acknowledgments</a></li>
   </ol>
-</details>
+</details> -->
 
 
 
